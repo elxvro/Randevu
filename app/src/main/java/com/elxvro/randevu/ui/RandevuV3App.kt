@@ -10,13 +10,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.Business
 import androidx.compose.material.icons.rounded.CalendarMonth
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Home
@@ -66,7 +64,6 @@ import com.elxvro.randevu.core.defaultBusinessState
 fun RandevuV3App() {
     var businessMode by rememberSaveable { mutableStateOf(false) }
     var businessState by remember { mutableStateOf(defaultBusinessState()) }
-
     Column(Modifier.fillMaxSize().background(AppBackground)) {
         Surface(color = Color.White, shadowElevation = 2.dp) {
             Row(
@@ -75,7 +72,7 @@ fun RandevuV3App() {
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(Icons.Rounded.CalendarMonth, null, tint = BrandBlue)
-                Text("Randevu", fontWeight = FontWeight.ExtraBold, modifier = Modifier.weight(1f))
+                Text("Randevu", fontWeight = FontWeight.ExtraBold)
                 if (businessMode) {
                     OutlinedButton(onClick = { businessMode = false }) { Text("Müşteri") }
                     FilledTonalButton(onClick = {}) { Text("İşletme") }
@@ -85,12 +82,8 @@ fun RandevuV3App() {
                 }
             }
         }
-        Box(Modifier.weight(1f)) {
-            if (businessMode) {
-                BusinessManager(state = businessState, onState = { businessState = it })
-            } else {
-                RandevuApp()
-            }
+        Box(Modifier.fillMaxSize()) {
+            if (businessMode) BusinessManager(businessState) { businessState = it } else RandevuApp()
         }
     }
 }
@@ -139,27 +132,20 @@ private fun PanelTab(state: BusinessState) {
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         item {
             Text("İşletme Yönetimi", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
             Text(state.profile.name, color = TextSecondary)
         }
+        item { StatCard("Aktif hizmet", state.services.count { it.active }) }
+        item { StatCard("Aktif personel", state.staff.count { it.active }) }
+        item { StatCard("Aktif şube", state.branches.count { it.active }) }
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatCard("Hizmet", state.services.count { it.active }, Modifier.weight(1f))
-                StatCard("Personel", state.staff.count { it.active }, Modifier.weight(1f))
-                StatCard("Şube", state.branches.count { it.active }, Modifier.weight(1f))
-            }
-        }
-        item {
-            Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("Aktif kontroller", fontWeight = FontWeight.Bold)
-                    Text("• Randevu çakışma kontrolü", color = TextSecondary)
-                    Text("• Çalışma saati ve mola kontrolü", color = TextSecondary)
-                    Text("• Kapalı gün kontrolü", color = TextSecondary)
-                    Text("• Personel ve şube uygunluğu", color = TextSecondary)
+                    Text("Randevu çakışması • çalışma saati • mola • kapalı gün • personel/şube uygunluğu", color = TextSecondary)
                 }
             }
         }
@@ -167,11 +153,11 @@ private fun PanelTab(state: BusinessState) {
 }
 
 @Composable
-private fun StatCard(label: String, count: Int, modifier: Modifier) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Column(Modifier.padding(12.dp)) {
+private fun StatCard(label: String, count: Int) {
+    Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
+        Column(Modifier.fillMaxWidth().padding(14.dp)) {
             Text(count.toString(), fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = BrandBlue)
-            Text(label, fontSize = 12.sp, color = TextSecondary)
+            Text(label, color = TextSecondary)
         }
     }
 }
@@ -181,39 +167,26 @@ private fun ServiceTab(state: BusinessState, onState: (BusinessState) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var duration by rememberSaveable { mutableStateOf("30") }
     var price by rememberSaveable { mutableStateOf("250") }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Title("Hizmet Yönetimi") }
         item {
             Form {
                 OutlinedTextField(name, { name = it }, label = { Text("Hizmet adı") }, modifier = Modifier.fillMaxWidth())
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, label = { Text("Dakika") }, modifier = Modifier.weight(1f))
-                    OutlinedTextField(price, { price = it.filter(Char::isDigit) }, label = { Text("Fiyat ₺") }, modifier = Modifier.weight(1f))
-                }
+                OutlinedTextField(duration, { duration = it.filter(Char::isDigit) }, label = { Text("Süre / dakika") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(price, { price = it.filter(Char::isDigit) }, label = { Text("Fiyat ₺") }, modifier = Modifier.fillMaxWidth())
                 Button(onClick = {
-                    val d = duration.toIntOrNull()
-                    val p = price.toIntOrNull()
+                    val d = duration.toIntOrNull(); val p = price.toIntOrNull()
                     if (name.isNotBlank() && d != null && d > 0 && p != null) {
                         onState(BusinessEngine.reduce(state, BusinessAction.UpsertService(ServiceConfig("service-${System.nanoTime()}", name.trim(), d, p))))
                         name = ""
                     }
-                }, modifier = Modifier.fillMaxWidth()) {
-                    Icon(Icons.Rounded.Add, null); Spacer(Modifier.size(6.dp)); Text("Hizmet Ekle")
-                }
+                }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Rounded.Add, null); Spacer(Modifier.size(6.dp)); Text("Hizmet Ekle") }
             }
         }
         items(state.services, key = { it.id }) { service ->
-            ManageCard(
-                title = service.name,
-                subtitle = "${service.durationMinutes} dk • ${service.price} ₺",
-                active = service.active,
-                onToggle = { onState(BusinessEngine.reduce(state, BusinessAction.ToggleService(service.id))) },
-                onDelete = { onState(BusinessEngine.reduce(state, BusinessAction.DeleteService(service.id))) }
-            )
+            ManageCard(service.name, "${service.durationMinutes} dk • ${service.price} ₺", service.active,
+                { onState(BusinessEngine.reduce(state, BusinessAction.ToggleService(service.id))) },
+                { onState(BusinessEngine.reduce(state, BusinessAction.DeleteService(service.id))) })
         }
     }
 }
@@ -222,11 +195,7 @@ private fun ServiceTab(state: BusinessState, onState: (BusinessState) -> Unit) {
 private fun StaffTab(state: BusinessState, onState: (BusinessState) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var title by rememberSaveable { mutableStateOf("") }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Title("Personel Yönetimi") }
         item {
             Form {
@@ -235,13 +204,7 @@ private fun StaffTab(state: BusinessState, onState: (BusinessState) -> Unit) {
                 Button(onClick = {
                     if (name.isNotBlank()) {
                         val branchId = state.branches.firstOrNull { it.active }?.id ?: "main"
-                        val member = StaffMember(
-                            id = "staff-${System.nanoTime()}",
-                            name = name.trim(),
-                            title = title.ifBlank { "Personel" }.trim(),
-                            serviceIds = state.services.filter { it.active }.map { it.id }.toSet(),
-                            branchId = branchId
-                        )
+                        val member = StaffMember("staff-${System.nanoTime()}", name.trim(), title.ifBlank { "Personel" }, true, state.services.filter { it.active }.map { it.id }.toSet(), branchId)
                         onState(BusinessEngine.reduce(state, BusinessAction.UpsertStaff(member)))
                         name = ""; title = ""
                     }
@@ -250,50 +213,34 @@ private fun StaffTab(state: BusinessState, onState: (BusinessState) -> Unit) {
         }
         items(state.staff, key = { it.id }) { member ->
             val branch = state.branches.firstOrNull { it.id == member.branchId }?.name ?: "Şube yok"
-            ManageCard(
-                title = member.name,
-                subtitle = "${member.title} • $branch • ${member.serviceIds.size} hizmet",
-                active = member.active,
-                onToggle = { onState(BusinessEngine.reduce(state, BusinessAction.ToggleStaff(member.id))) },
-                onDelete = { onState(BusinessEngine.reduce(state, BusinessAction.DeleteStaff(member.id))) }
-            )
+            ManageCard(member.name, "${member.title} • $branch • ${member.serviceIds.size} hizmet", member.active,
+                { onState(BusinessEngine.reduce(state, BusinessAction.ToggleStaff(member.id))) },
+                { onState(BusinessEngine.reduce(state, BusinessAction.DeleteStaff(member.id))) })
         }
     }
 }
 
 @Composable
 private fun ScheduleTab(state: BusinessState, onState: (BusinessState) -> Unit) {
-    var closedDate by rememberSaveable { mutableStateOf("") }
+    var date by rememberSaveable { mutableStateOf("") }
     var reason by rememberSaveable { mutableStateOf("") }
     val names = listOf("Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar")
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Title("Çalışma Saatleri") }
         items(state.workingDays.sortedBy { it.dayOfWeek }, key = { it.dayOfWeek }) { day ->
             Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(names[day.dayOfWeek - 1], fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(names[day.dayOfWeek - 1], fontWeight = FontWeight.Bold)
                         Switch(day.enabled, { onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(enabled = it)))) })
                     }
                     if (day.enabled) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            OutlinedButton(onClick = {
-                                val next = if (day.open == "09:00") "10:00" else "09:00"
-                                onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(open = next))))
-                            }, modifier = Modifier.weight(1f)) { Text("Açılış ${day.open}") }
-                            OutlinedButton(onClick = {
-                                val next = if (day.close == "19:00") "20:00" else "19:00"
-                                onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(close = next))))
-                            }, modifier = Modifier.weight(1f)) { Text("Kapanış ${day.close}") }
+                        Text("${day.open} - ${day.close}", color = TextSecondary)
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { val next = if (day.open == "09:00") "10:00" else "09:00"; onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(open = next)))) }) { Text("Açılış") }
+                            OutlinedButton(onClick = { val next = if (day.close == "19:00") "20:00" else "19:00"; onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(close = next)))) }) { Text("Kapanış") }
+                            FilledTonalButton(onClick = { val b = if (day.breaks.isEmpty()) listOf(BreakWindow("13:00", "13:30")) else emptyList(); onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(breaks = b)))) }) { Text(if (day.breaks.isEmpty()) "Mola +" else "Mola -") }
                         }
-                        FilledTonalButton(onClick = {
-                            val breaks = if (day.breaks.isEmpty()) listOf(BreakWindow("13:00", "13:30")) else emptyList()
-                            onState(BusinessEngine.reduce(state, BusinessAction.UpsertWorkingDay(day.copy(breaks = breaks))))
-                        }) { Text(if (day.breaks.isEmpty()) "13:00 mola ekle" else "Molayı kaldır") }
                     }
                 }
             }
@@ -301,21 +248,17 @@ private fun ScheduleTab(state: BusinessState, onState: (BusinessState) -> Unit) 
         item { Title("Kapalı Gün") }
         item {
             Form {
-                OutlinedTextField(closedDate, { closedDate = it }, label = { Text("YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(date, { date = it }, label = { Text("YYYY-MM-DD") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(reason, { reason = it }, label = { Text("Açıklama") }, modifier = Modifier.fillMaxWidth())
                 Button(onClick = {
-                    if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(closedDate)) {
-                        onState(BusinessEngine.reduce(state, BusinessAction.AddClosedDay(ClosedDay(closedDate, reason.ifBlank { "Kapalı" }))))
-                        closedDate = ""; reason = ""
+                    if (Regex("\\d{4}-\\d{2}-\\d{2}").matches(date)) {
+                        onState(BusinessEngine.reduce(state, BusinessAction.AddClosedDay(ClosedDay(date, reason.ifBlank { "Kapalı" }))))
+                        date = ""; reason = ""
                     }
                 }, modifier = Modifier.fillMaxWidth()) { Text("Kapalı Gün Ekle") }
             }
         }
-        items(state.closedDays, key = { it.date }) { day ->
-            RowCard(day.date, day.reason) {
-                onState(BusinessEngine.reduce(state, BusinessAction.RemoveClosedDay(day.date)))
-            }
-        }
+        items(state.closedDays, key = { it.date }) { item -> RowCard(item.date, item.reason) { onState(BusinessEngine.reduce(state, BusinessAction.RemoveClosedDay(item.date))) } }
     }
 }
 
@@ -328,11 +271,7 @@ private fun SettingsTab(state: BusinessState, onState: (BusinessState) -> Unit) 
     var branchName by rememberSaveable { mutableStateOf("") }
     var branchAddress by rememberSaveable { mutableStateOf("") }
     var branchPhone by rememberSaveable { mutableStateOf("") }
-    LazyColumn(
-        Modifier.fillMaxSize(),
-        contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { Title("İşletme Bilgileri") }
         item {
             Form {
@@ -340,9 +279,7 @@ private fun SettingsTab(state: BusinessState, onState: (BusinessState) -> Unit) 
                 OutlinedTextField(phone, { phone = it }, label = { Text("Telefon") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(address, { address = it }, label = { Text("Adres") }, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(description, { description = it }, label = { Text("Açıklama") }, modifier = Modifier.fillMaxWidth(), minLines = 2)
-                Button(onClick = {
-                    onState(BusinessEngine.reduce(state, BusinessAction.UpdateProfile(BusinessProfile(businessName, phone, address, description))))
-                }, modifier = Modifier.fillMaxWidth()) { Text("Bilgileri Kaydet") }
+                Button(onClick = { onState(BusinessEngine.reduce(state, BusinessAction.UpdateProfile(BusinessProfile(businessName, phone, address, description)))) }, modifier = Modifier.fillMaxWidth()) { Text("Bilgileri Kaydet") }
             }
         }
         item { Title("Şubeler") }
@@ -359,30 +296,22 @@ private fun SettingsTab(state: BusinessState, onState: (BusinessState) -> Unit) 
                 }, modifier = Modifier.fillMaxWidth()) { Text("Şube Ekle") }
             }
         }
-        items(state.branches, key = { it.id }) { branch ->
-            ManageCard(
-                title = branch.name,
-                subtitle = "${branch.address} • ${branch.phone}",
-                active = branch.active,
-                onToggle = { onState(BusinessEngine.reduce(state, BusinessAction.ToggleBranch(branch.id))) },
-                onDelete = {
-                    if (state.branches.size > 1) onState(BusinessEngine.reduce(state, BusinessAction.DeleteBranch(branch.id)))
-                }
-            )
-        }
+        items(state.branches, key = { it.id }) { branch -> ManageCard(branch.name, "${branch.address} • ${branch.phone}", branch.active,
+            { onState(BusinessEngine.reduce(state, BusinessAction.ToggleBranch(branch.id))) },
+            { if (state.branches.size > 1) onState(BusinessEngine.reduce(state, BusinessAction.DeleteBranch(branch.id))) }) }
     }
 }
 
 @Composable
 private fun ManageCard(title: String, subtitle: String, active: Boolean, onToggle: () -> Unit, onDelete: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(title, fontWeight = FontWeight.Bold)
-                Text(subtitle, color = TextSecondary, fontSize = 12.sp)
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(title, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = TextSecondary, fontSize = 12.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Switch(active, { onToggle() })
+                IconButton(onClick = onDelete) { Icon(Icons.Rounded.DeleteOutline, "Sil", tint = DangerRed) }
             }
-            Switch(active, { onToggle() })
-            IconButton(onClick = onDelete) { Icon(Icons.Rounded.DeleteOutline, "Sil", tint = DangerRed) }
         }
     }
 }
@@ -390,8 +319,8 @@ private fun ManageCard(title: String, subtitle: String, active: Boolean, onToggl
 @Composable
 private fun RowCard(title: String, subtitle: String, onDelete: () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Color.White)) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) { Text(title, fontWeight = FontWeight.Bold); Text(subtitle, color = TextSecondary) }
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Text(title, fontWeight = FontWeight.Bold); Text(subtitle, color = TextSecondary)
             IconButton(onClick = onDelete) { Icon(Icons.Rounded.DeleteOutline, "Sil", tint = DangerRed) }
         }
     }
@@ -400,11 +329,9 @@ private fun RowCard(title: String, subtitle: String, onDelete: () -> Unit) {
 @Composable
 private fun Form(content: @Composable () -> Unit) {
     Card(colors = CardDefaults.cardColors(containerColor = Color.White), shape = RoundedCornerShape(18.dp)) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) { content() }
+        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) { content() }
     }
 }
 
 @Composable
-private fun Title(text: String) {
-    Text(text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
-}
+private fun Title(text: String) { Text(text, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold) }
