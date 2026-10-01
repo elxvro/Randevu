@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.elxvro.randevu.ui.RandevuApp
+import com.elxvro.randevu.ui.RandevuCoreApp
 import com.elxvro.randevu.ui.RandevuTheme
 
 class MainActivity : ComponentActivity() {
@@ -13,7 +13,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             RandevuTheme {
-                RandevuApp()
+                RandevuCoreApp()
             }
         }
     }
