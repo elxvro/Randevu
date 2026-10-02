@@ -9,17 +9,17 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-val RefBackground = Color(ReferenceDesignContract.backgroundArgb.toULong())
-val RefSurface = Color(ReferenceDesignContract.surfaceArgb.toULong())
-val RefSurfaceRaised = Color(ReferenceDesignContract.surfaceRaisedArgb.toULong())
-val RefCyan = Color(ReferenceDesignContract.cyanArgb.toULong())
-val RefBlue = Color(ReferenceDesignContract.blueArgb.toULong())
-val RefText = Color(ReferenceDesignContract.textPrimaryArgb.toULong())
-val RefTextMuted = Color(ReferenceDesignContract.textSecondaryArgb.toULong())
-val RefBorder = Color(ReferenceDesignContract.borderArgb.toULong())
-val RefSuccess = Color(ReferenceDesignContract.successArgb.toULong())
-val RefWarning = Color(ReferenceDesignContract.warningArgb.toULong())
-val RefDanger = Color(ReferenceDesignContract.dangerArgb.toULong())
+val RefBackground = Color(ReferenceDesignContract.backgroundArgb)
+val RefSurface = Color(ReferenceDesignContract.surfaceArgb)
+val RefSurfaceRaised = Color(ReferenceDesignContract.surfaceRaisedArgb)
+val RefCyan = Color(ReferenceDesignContract.cyanArgb)
+val RefBlue = Color(ReferenceDesignContract.blueArgb)
+val RefText = Color(ReferenceDesignContract.textPrimaryArgb)
+val RefTextMuted = Color(ReferenceDesignContract.textSecondaryArgb)
+val RefBorder = Color(ReferenceDesignContract.borderArgb)
+val RefSuccess = Color(ReferenceDesignContract.successArgb)
+val RefWarning = Color(ReferenceDesignContract.warningArgb)
+val RefDanger = Color(ReferenceDesignContract.dangerArgb)
 val RefDisabled = Color(0xFF607784)
 
 private val ReferenceColors = darkColorScheme(
