@@ -80,7 +80,7 @@ private fun QualityDialog(appointments: List<Appointment>, onDismiss: () -> Unit
         title = {
             Column {
                 Text("Uygulama Kontrolü", fontWeight = FontWeight.ExtraBold)
-                Text("v0.8.0 • Polish", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                Text("v1.0.0 • Final", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
             }
         },
         text = {
