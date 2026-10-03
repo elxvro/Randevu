@@ -17,9 +17,9 @@ function state_is(string $expected, array $actual, string $message): void {
 
 $base = ['enabled' => true, 'template_name' => 'appointment_reminder', 'template_language' => 'tr'];
 $config = ['meta_access_token' => 'SECRET_TOKEN', 'meta_phone_number_id' => '123', 'meta_graph_version' => 'v23.0'];
-state_is('disabled', WhatsAppStatusService::project($base + ['enabled' => false], $config, null), 'disabled');
-state_is('incomplete', WhatsAppStatusService::project($base, $config + ['meta_phone_number_id' => ''], null), 'missing phone id');
-state_is('incomplete', WhatsAppStatusService::project($base, $config + ['meta_access_token' => ''], null), 'missing token');
+state_is('disabled', WhatsAppStatusService::project(array_merge($base, ['enabled' => false]), $config, null), 'disabled');
+state_is('incomplete', WhatsAppStatusService::project($base, array_merge($config, ['meta_phone_number_id' => '']), null), 'missing phone id');
+state_is('incomplete', WhatsAppStatusService::project($base, array_merge($config, ['meta_access_token' => '']), null), 'missing token');
 state_is('unreachable', WhatsAppStatusService::project($base, $config, 'timeout'), 'probe failure');
 state_is('connected', WhatsAppStatusService::project($base, $config, null), 'connected');
 
