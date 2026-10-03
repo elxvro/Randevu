@@ -19,8 +19,5 @@ data class StaffLeave(
     val createdAt: Long
 )
 
-fun defaultStaffRecords(): List<StaffRecord> = listOf(
-    StaffRecord("staff-mert", "Mert Yılmaz", "Uzman", "+905339876543", true),
-    StaffRecord("staff-zeynep", "Zeynep Arslan", "Uzman", "+905321234567", true),
-    StaffRecord("staff-deniz", "Deniz Arıcı", "Uzman", "+905327894561", true)
-)
+@Deprecated("v1.3.0 no longer seeds staff", level = DeprecationLevel.WARNING)
+fun defaultStaffRecords(): List<StaffRecord> = emptyList()

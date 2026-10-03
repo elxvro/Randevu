@@ -1,6 +1,10 @@
 package com.elxvro.randevu.storage
 
 import android.content.Context
+import com.elxvro.randevu.business.BusinessProfile
+import com.elxvro.randevu.business.BusinessStorageCodec
+import com.elxvro.randevu.business.ServiceRecord
+import com.elxvro.randevu.business.V13Migration
 import com.elxvro.randevu.core.ApiMode
 import com.elxvro.randevu.core.Appointment
 import com.elxvro.randevu.core.AppointmentStatus
@@ -14,12 +18,55 @@ import com.elxvro.randevu.core.SyncOperationType
 import com.elxvro.randevu.staff.StaffLeave
 import com.elxvro.randevu.staff.StaffLeaveEngine
 import com.elxvro.randevu.staff.StaffRecord
-import com.elxvro.randevu.staff.defaultStaffRecords
+import java.time.ZoneId
 import org.json.JSONArray
 import org.json.JSONObject
 
 class LiveSyncStore(context: Context) {
     private val prefs = context.getSharedPreferences("randevu_live_sync_v1", Context.MODE_PRIVATE)
+
+    fun migrateV13IfNeeded() {
+        if (prefs.getBoolean(KEY_MIGRATION_V13, false)) return
+        saveAppointments(V13Migration.cleanAppointments(loadAppointments()))
+        saveStaff(V13Migration.cleanStaff(loadStaff()))
+        prefs.edit().putBoolean(KEY_MIGRATION_V13, true).apply()
+    }
+
+    fun loadBusinessProfile(): BusinessProfile = BusinessStorageCodec.decodeProfile(
+        prefs.getString(KEY_BUSINESS_PROFILE, null),
+        ZoneId.systemDefault().id
+    )
+
+    fun saveBusinessProfile(profile: BusinessProfile) {
+        prefs.edit().putString(KEY_BUSINESS_PROFILE, BusinessStorageCodec.encodeProfile(profile)).apply()
+    }
+
+    fun loadServices(): List<ServiceRecord> = BusinessStorageCodec.decodeServices(prefs.getString(KEY_SERVICES, null))
+
+    fun saveServices(services: List<ServiceRecord>) {
+        prefs.edit().putString(KEY_SERVICES, BusinessStorageCodec.encodeServices(services)).apply()
+    }
+
+    fun loadSetupStep(): Int = prefs.getInt(KEY_SETUP_STEP, 0).coerceIn(0, 4)
+
+    fun saveSetupStep(step: Int) {
+        prefs.edit().putInt(KEY_SETUP_STEP, step.coerceIn(0, 4)).apply()
+    }
+
+    fun clearBusinessSetup(clearOperationalData: Boolean) {
+        val editor = prefs.edit()
+            .remove(KEY_BUSINESS_PROFILE)
+            .remove(KEY_SERVICES)
+            .remove(KEY_SETUP_STEP)
+        if (clearOperationalData) {
+            editor.remove(KEY_APPOINTMENTS)
+                .remove(KEY_STAFF)
+                .remove(KEY_STAFF_LEAVES)
+                .remove(KEY_PENDING)
+                .remove(KEY_LAST_SYNC)
+        }
+        editor.apply()
+    }
 
     fun loadSyncState(): LiveSyncState {
         val pending = mutableListOf<PendingSyncOperation>()
@@ -70,7 +117,7 @@ class LiveSyncStore(context: Context) {
     }
 
     fun loadStaff(): List<StaffRecord> {
-        val raw = prefs.getString(KEY_STAFF, null) ?: return defaultStaffRecords()
+        val raw = prefs.getString(KEY_STAFF, null) ?: return emptyList()
         return runCatching {
             val array = JSONArray(raw)
             buildList {
@@ -130,7 +177,7 @@ class LiveSyncStore(context: Context) {
                 mode = mode
             ),
             connectionState = if (mode == ApiMode.DEMO) ConnectionState.CONNECTED else ConnectionState.IDLE,
-            serverName = if (mode == ApiMode.DEMO) "Yerel Demo" else "",
+            serverName = if (mode == ApiMode.DEMO) "Yerel" else "",
             session = session
         )
     }
@@ -168,9 +215,7 @@ class LiveSyncStore(context: Context) {
             type = SyncOperationType.valueOf(json.getString("type")),
             appointmentId = json.getString("appointment_id"),
             appointment = json.optJSONObject("appointment")?.let(::decodeAppointment),
-            status = json.optString("status").takeIf { it.isNotBlank() && it != "null" }?.let {
-                AppointmentStatus.valueOf(it)
-            }
+            status = json.optString("status").takeIf { it.isNotBlank() && it != "null" }?.let { AppointmentStatus.valueOf(it) }
         )
     }.getOrNull()
 
@@ -251,6 +296,10 @@ class LiveSyncStore(context: Context) {
         const val KEY_STAFF = "staff_v12"
         const val KEY_STAFF_LEAVES = "staff_leaves_v12"
         const val KEY_REMINDER_ENABLED = "reminder_enabled_v12"
+        const val KEY_BUSINESS_PROFILE = "business_profile_v13"
+        const val KEY_SERVICES = "services_v13"
+        const val KEY_SETUP_STEP = "setup_step_v13"
+        const val KEY_MIGRATION_V13 = "migration_v13_complete"
         const val KEY_MODE = "mode"
         const val KEY_BASE_URL = "base_url"
         const val KEY_TOKEN = "token"
