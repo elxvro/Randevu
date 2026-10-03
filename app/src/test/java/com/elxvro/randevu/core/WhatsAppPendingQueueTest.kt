@@ -13,7 +13,8 @@ class WhatsAppPendingQueueTest {
         staff = "Deniz",
         date = "2026-10-05",
         time = "10:00",
-        status = AppointmentStatus.CONFIRMED
+        status = AppointmentStatus.CONFIRMED,
+        note = ""
     )
 
     @Test fun `latest operation replaces older operation for same appointment`() {
