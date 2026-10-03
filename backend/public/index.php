@@ -16,10 +16,10 @@ function route_ends_with(string $path, string $route): bool {
 
 try {
     if ($method === 'GET' && route_ends_with($path, '/health')) {
-        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'1.3.0','php'=>PHP_VERSION,'time'=>gmdate('c')]);
+        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'1.3.1','php'=>PHP_VERSION,'time'=>gmdate('c')]);
     }
     if ($method === 'GET' && route_ends_with($path, '/version')) {
-        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'1.3.0']);
+        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'1.3.1']);
     }
 
     $config = Config::load();
@@ -63,6 +63,9 @@ try {
 
     if ($method === 'PUT' && route_ends_with($path, '/business/whatsapp-settings')) {
         $updated = $settingsRepo->updateWhatsApp($businessId, Http::jsonBody());
+        if (!(bool)$updated['whatsapp_enabled']) {
+            (new ReminderQueueRepository($pdo))->cancelBusiness($businessId);
+        }
         Http::respond(['ok'=>true,'whatsapp'=>WhatsAppStatusService::project($updated, $config, null)]);
     }
 

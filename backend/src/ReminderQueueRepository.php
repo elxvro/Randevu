@@ -4,6 +4,12 @@ declare(strict_types=1);
 
 interface ReminderQueueStore
 {
+    public function cancelBusiness(int $businessId): void
+    {
+        $stmt = $this->pdo->prepare("UPDATE whatsapp_reminder_queue SET status='cancelled',updated_at=CURRENT_TIMESTAMP WHERE business_id=:business AND status IN ('pending','processing')");
+        $stmt->execute(['business'=>$businessId]);
+    }
+
     public function claimDue(int $batchSize): array;
     public function markSent(int $id, string $messageId): void;
     public function markRetry(int $id, string $error): void;

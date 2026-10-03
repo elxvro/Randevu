@@ -15,6 +15,10 @@ import com.elxvro.randevu.core.ConnectionState
 import com.elxvro.randevu.core.LiveSyncState
 import com.elxvro.randevu.core.PendingSyncOperation
 import com.elxvro.randevu.core.SyncOperationType
+import com.elxvro.randevu.core.WhatsAppPendingSync
+import com.elxvro.randevu.core.WhatsAppSettings
+import com.elxvro.randevu.core.WhatsAppStorageCodec
+import com.elxvro.randevu.network.WhatsAppServerConfig
 import com.elxvro.randevu.staff.StaffLeave
 import com.elxvro.randevu.staff.StaffLeaveEngine
 import com.elxvro.randevu.staff.StaffRecord
@@ -58,6 +62,9 @@ class LiveSyncStore(context: Context) {
             .remove(KEY_BUSINESS_PROFILE)
             .remove(KEY_SERVICES)
             .remove(KEY_SETUP_STEP)
+            .remove(KEY_WHATSAPP_SETTINGS)
+            .remove(KEY_WHATSAPP_SERVER)
+            .remove(KEY_WHATSAPP_PENDING)
         if (clearOperationalData) {
             editor.remove(KEY_APPOINTMENTS)
                 .remove(KEY_STAFF)
@@ -156,6 +163,27 @@ class LiveSyncStore(context: Context) {
 
     fun saveReminderEnabled(enabled: Boolean) {
         prefs.edit().putBoolean(KEY_REMINDER_ENABLED, enabled).apply()
+    }
+
+    fun loadWhatsAppSettings(): WhatsAppSettings =
+        WhatsAppStorageCodec.decodeSettings(prefs.getString(KEY_WHATSAPP_SETTINGS, null))
+
+    fun saveWhatsAppSettings(settings: WhatsAppSettings) {
+        prefs.edit().putString(KEY_WHATSAPP_SETTINGS, WhatsAppStorageCodec.encodeSettings(settings)).apply()
+    }
+
+    fun loadWhatsAppServerConfig(): WhatsAppServerConfig =
+        WhatsAppStorageCodec.decodeServerConfig(prefs.getString(KEY_WHATSAPP_SERVER, null))
+
+    fun saveWhatsAppServerConfig(config: WhatsAppServerConfig) {
+        prefs.edit().putString(KEY_WHATSAPP_SERVER, WhatsAppStorageCodec.encodeServerConfig(config)).apply()
+    }
+
+    fun loadWhatsAppPending(): List<WhatsAppPendingSync> =
+        WhatsAppStorageCodec.decodePending(prefs.getString(KEY_WHATSAPP_PENDING, null))
+
+    fun saveWhatsAppPending(operations: List<WhatsAppPendingSync>) {
+        prefs.edit().putString(KEY_WHATSAPP_PENDING, WhatsAppStorageCodec.encodePending(operations)).apply()
     }
 
     fun loadBackendState(): BackendState {
@@ -300,6 +328,9 @@ class LiveSyncStore(context: Context) {
         const val KEY_SERVICES = "services_v13"
         const val KEY_SETUP_STEP = "setup_step_v13"
         const val KEY_MIGRATION_V13 = "migration_v13_complete"
+        const val KEY_WHATSAPP_SETTINGS = "whatsapp_settings_v13"
+        const val KEY_WHATSAPP_SERVER = "whatsapp_server_v13"
+        const val KEY_WHATSAPP_PENDING = "whatsapp_pending_v13"
         const val KEY_MODE = "mode"
         const val KEY_BASE_URL = "base_url"
         const val KEY_TOKEN = "token"

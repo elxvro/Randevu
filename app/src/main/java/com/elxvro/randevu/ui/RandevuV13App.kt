@@ -38,6 +38,19 @@ import com.elxvro.randevu.core.Appointment
 import com.elxvro.randevu.core.AppointmentAction
 import com.elxvro.randevu.core.AppointmentEngine
 import com.elxvro.randevu.core.AppointmentStatus
+import com.elxvro.randevu.core.WhatsAppAppointmentMutation
+import com.elxvro.randevu.core.WhatsAppConnectionState
+import com.elxvro.randevu.core.WhatsAppMutationPolicy
+import com.elxvro.randevu.core.WhatsAppPendingQueue
+import com.elxvro.randevu.core.WhatsAppPendingSync
+import com.elxvro.randevu.core.WhatsAppReminderCore
+import com.elxvro.randevu.core.WhatsAppSettings
+import com.elxvro.randevu.core.WhatsAppSyncAction
+import com.elxvro.randevu.network.WhatsAppApiClient
+import com.elxvro.randevu.network.WhatsAppApiContract
+import com.elxvro.randevu.network.WhatsAppCallResult
+import com.elxvro.randevu.network.WhatsAppScheduleResult
+import com.elxvro.randevu.network.WhatsAppServerConfig
 import com.elxvro.randevu.notifications.AppointmentNotifier
 import com.elxvro.randevu.notifications.AppointmentReminderScheduler
 import com.elxvro.randevu.notifications.NotificationCenterProjection
@@ -47,11 +60,14 @@ import com.elxvro.randevu.staff.StaffRecord
 import com.elxvro.randevu.storage.LiveSyncStore
 import java.time.LocalDate
 import java.time.LocalDateTime
+import kotlinx.coroutines.launch
 
 @Composable
 fun RandevuV13App() {
     val context = LocalContext.current
     val store = remember { LiveSyncStore(context.applicationContext) }
+    val scope = rememberCoroutineScope()
+    val whatsAppApi = remember { WhatsAppApiClient() }
     remember { store.migrateV13IfNeeded(); true }
 
     var profile by remember { mutableStateOf(store.loadBusinessProfile()) }
@@ -62,6 +78,23 @@ fun RandevuV13App() {
     var setupStep by rememberSaveable { mutableIntStateOf(store.loadSetupStep()) }
     var reminderEnabled by rememberSaveable { mutableStateOf(store.loadReminderEnabled()) }
     var notificationPermission by remember { mutableStateOf(v13HasNotificationPermission(context)) }
+
+    var whatsAppSettings by remember { mutableStateOf(store.loadWhatsAppSettings()) }
+    var whatsAppServerConfig by remember { mutableStateOf(store.loadWhatsAppServerConfig()) }
+    val whatsAppPending = remember {
+        mutableStateListOf<WhatsAppPendingSync>().apply { addAll(store.loadWhatsAppPending()) }
+    }
+    var whatsAppConnectionState by remember {
+        mutableStateOf(
+            when {
+                !whatsAppSettings.enabled -> WhatsAppConnectionState.DISABLED
+                !whatsAppServerConfig.configured -> WhatsAppConnectionState.INCOMPLETE
+                else -> WhatsAppConnectionState.UNREACHABLE
+            }
+        )
+    }
+    var whatsAppBusy by remember { mutableStateOf(false) }
+    var whatsAppMessage by remember { mutableStateOf<String?>(null) }
 
     val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         notificationPermission = granted
@@ -81,12 +114,250 @@ fun RandevuV13App() {
     }
 
     fun persistAppointments(next: List<Appointment>) {
-        appointments.clear(); appointments.addAll(next); store.saveAppointments(next)
+        appointments.clear()
+        appointments.addAll(next)
+        store.saveAppointments(next)
+    }
+
+    fun persistWhatsAppPending(next: List<WhatsAppPendingSync>) {
+        whatsAppPending.clear()
+        whatsAppPending.addAll(next)
+        store.saveWhatsAppPending(next)
+    }
+
+    suspend fun syncWhatsAppOperation(operation: WhatsAppPendingSync): Boolean {
+        val config = whatsAppServerConfig
+        if (!config.configured) {
+            whatsAppConnectionState = WhatsAppConnectionState.INCOMPLETE
+            return false
+        }
+
+        val result: WhatsAppCallResult<WhatsAppScheduleResult> = when (operation.mutation) {
+            WhatsAppAppointmentMutation.CREATE_OR_UPDATE -> {
+                val item = operation.appointment
+                if (item == null) {
+                    whatsAppMessage = "Bekleyen WhatsApp işleminin randevu verisi eksik."
+                    return false
+                }
+                whatsAppApi.upsertReminder(config, item)
+            }
+            WhatsAppAppointmentMutation.CANCEL_OR_DELETE ->
+                whatsAppApi.cancelReminder(config, operation.appointmentId)
+        }
+
+        val schedule = result.value
+        if (result.ok && schedule?.acknowledged == true) {
+            persistWhatsAppPending(WhatsAppPendingQueue.remove(whatsAppPending.toList(), operation.appointmentId))
+            whatsAppConnectionState = if (whatsAppSettings.enabled) {
+                WhatsAppConnectionState.CONNECTED
+            } else {
+                WhatsAppConnectionState.DISABLED
+            }
+            whatsAppMessage = when {
+                operation.mutation == WhatsAppAppointmentMutation.CANCEL_OR_DELETE ->
+                    "Bekleyen WhatsApp hatırlatmaları iptal edildi."
+                schedule.scheduledCount > 0 ->
+                    "${schedule.scheduledCount} WhatsApp hatırlatması sunucuda planlandı."
+                else ->
+                    "Sunucu işlemi onayladı; gönderilecek uygun WhatsApp hatırlatması bulunmuyor."
+            }
+            return true
+        }
+
+        persistWhatsAppPending(WhatsAppPendingQueue.enqueue(whatsAppPending.toList(), operation))
+        whatsAppConnectionState = if (result.httpCode == 401) {
+            WhatsAppConnectionState.INCOMPLETE
+        } else {
+            WhatsAppConnectionState.UNREACHABLE
+        }
+        whatsAppMessage = if (result.httpCode == 401) {
+            "Sunucu oturumu geçersiz. WhatsApp bağlantısını yeniden kurun."
+        } else {
+            "Sunucuya ulaşılamadı; WhatsApp işlemi cihazda beklemeye alındı."
+        }
+        return false
+    }
+
+    suspend fun flushWhatsAppPending() {
+        val snapshot = whatsAppPending.toList()
+        for (operation in snapshot) {
+            if (!syncWhatsAppOperation(operation)) break
+        }
+    }
+
+    fun handleWhatsAppMutation(operation: WhatsAppPendingSync) {
+        when (WhatsAppReminderCore.syncAction(whatsAppSettings, whatsAppConnectionState, operation.mutation)) {
+            WhatsAppSyncAction.NONE -> {
+                persistWhatsAppPending(WhatsAppPendingQueue.remove(whatsAppPending.toList(), operation.appointmentId))
+            }
+            WhatsAppSyncAction.PENDING_LOCAL -> {
+                persistWhatsAppPending(WhatsAppPendingQueue.enqueue(whatsAppPending.toList(), operation))
+                whatsAppMessage = "WhatsApp işlemi sunucu bağlantısı kurulana kadar cihazda bekliyor."
+            }
+            WhatsAppSyncAction.UPSERT, WhatsAppSyncAction.CANCEL -> {
+                persistWhatsAppPending(WhatsAppPendingQueue.enqueue(whatsAppPending.toList(), operation))
+                scope.launch {
+                    whatsAppBusy = true
+                    syncWhatsAppOperation(operation)
+                    whatsAppBusy = false
+                }
+            }
+        }
+    }
+
+    fun refreshWhatsAppStatus(testConnection: Boolean = false) {
+        if (!whatsAppServerConfig.configured) {
+            whatsAppConnectionState = if (whatsAppSettings.enabled) {
+                WhatsAppConnectionState.INCOMPLETE
+            } else {
+                WhatsAppConnectionState.DISABLED
+            }
+            whatsAppMessage = if (whatsAppSettings.enabled) "WhatsApp sunucu kurulumu gerekli." else null
+            return
+        }
+
+        scope.launch {
+            whatsAppBusy = true
+            val result = if (testConnection) {
+                whatsAppApi.testConnection(whatsAppServerConfig, whatsAppSettings)
+            } else {
+                whatsAppApi.status(whatsAppServerConfig, whatsAppSettings)
+            }
+            val snapshot = result.value
+            if (result.ok && snapshot != null) {
+                whatsAppSettings = snapshot.settings
+                store.saveWhatsAppSettings(snapshot.settings)
+                whatsAppConnectionState = snapshot.state
+                whatsAppMessage = when {
+                    snapshot.error != null -> snapshot.error
+                    snapshot.state == WhatsAppConnectionState.CONNECTED && testConnection -> "WhatsApp sunucu bağlantısı başarılı."
+                    snapshot.state == WhatsAppConnectionState.CONNECTED -> null
+                    snapshot.state == WhatsAppConnectionState.INCOMPLETE -> "WhatsApp sunucu ayarları eksik."
+                    snapshot.state == WhatsAppConnectionState.DISABLED -> "WhatsApp hatırlatmaları kapalı."
+                    else -> "WhatsApp sunucusuna ulaşılamıyor."
+                }
+                if (snapshot.state == WhatsAppConnectionState.CONNECTED) flushWhatsAppPending()
+            } else {
+                whatsAppConnectionState = if (result.httpCode == 401) {
+                    WhatsAppConnectionState.INCOMPLETE
+                } else {
+                    WhatsAppConnectionState.UNREACHABLE
+                }
+                whatsAppMessage = if (result.httpCode == 401) {
+                    "Sunucu oturumu geçersiz. Bağlantıyı yeniden kurun."
+                } else {
+                    "WhatsApp sunucusuna ulaşılamıyor."
+                }
+            }
+            whatsAppBusy = false
+        }
+    }
+
+    fun connectWhatsApp(baseUrl: String, setupKey: String, settings: WhatsAppSettings) {
+        val normalized = WhatsAppApiContract.normalizeBaseUrl(baseUrl)
+        if (normalized.isBlank()) {
+            whatsAppMessage = "Sunucu adresi geçerli bir HTTPS adresi olmalı."
+            return
+        }
+        if (setupKey.isBlank()) {
+            whatsAppMessage = "Sunucu kurulum anahtarını girin."
+            return
+        }
+
+        scope.launch {
+            whatsAppBusy = true
+            val bootstrapProfile = profile.copy(ownerName = profile.ownerName.ifBlank { profile.businessName })
+            val bootstrap = whatsAppApi.bootstrap(normalized, setupKey, bootstrapProfile)
+            val token = bootstrap.value?.token.orEmpty()
+            if (!bootstrap.ok || token.isBlank()) {
+                whatsAppConnectionState = WhatsAppConnectionState.INCOMPLETE
+                whatsAppMessage = when (bootstrap.httpCode) {
+                    403 -> "Sunucu kurulum anahtarı geçersiz."
+                    else -> "WhatsApp sunucu kurulumu tamamlanamadı."
+                }
+                whatsAppBusy = false
+                return@launch
+            }
+
+            val config = WhatsAppServerConfig(normalized, token)
+            whatsAppServerConfig = config
+            store.saveWhatsAppServerConfig(config)
+            whatsAppSettings = settings
+            store.saveWhatsAppSettings(settings)
+
+            val save = whatsAppApi.saveSettings(config, settings)
+            val snapshot = save.value
+            if (save.ok && snapshot != null) {
+                whatsAppSettings = snapshot.settings
+                store.saveWhatsAppSettings(snapshot.settings)
+                whatsAppConnectionState = snapshot.state
+                whatsAppMessage = if (snapshot.state == WhatsAppConnectionState.CONNECTED) {
+                    "WhatsApp sunucusu bağlandı."
+                } else {
+                    "Sunucu bağlandı; Meta WhatsApp ayarlarının tamamlanması gerekiyor."
+                }
+                if (snapshot.state == WhatsAppConnectionState.CONNECTED) flushWhatsAppPending()
+            } else {
+                whatsAppConnectionState = WhatsAppConnectionState.UNREACHABLE
+                whatsAppMessage = "Sunucu oluşturuldu ancak WhatsApp ayarları kaydedilemedi."
+            }
+            whatsAppBusy = false
+        }
+    }
+
+    fun saveWhatsApp(baseUrl: String, settings: WhatsAppSettings) {
+        val normalized = WhatsAppApiContract.normalizeBaseUrl(baseUrl)
+        if (normalized.isBlank()) {
+            whatsAppMessage = "Sunucu adresi geçerli bir HTTPS adresi olmalı."
+            return
+        }
+
+        val config = whatsAppServerConfig.copy(baseUrl = normalized)
+        whatsAppServerConfig = config
+        whatsAppSettings = settings
+        store.saveWhatsAppServerConfig(config)
+        store.saveWhatsAppSettings(settings)
+
+        if (!config.configured) {
+            whatsAppConnectionState = if (settings.enabled) WhatsAppConnectionState.INCOMPLETE else WhatsAppConnectionState.DISABLED
+            whatsAppMessage = "Önce WhatsApp sunucu bağlantısını kurun."
+            return
+        }
+
+        scope.launch {
+            whatsAppBusy = true
+            whatsAppApi.saveProfile(config, profile)
+            val save = whatsAppApi.saveSettings(config, settings)
+            val snapshot = save.value
+            if (save.ok && snapshot != null) {
+                whatsAppSettings = snapshot.settings
+                store.saveWhatsAppSettings(snapshot.settings)
+                whatsAppConnectionState = snapshot.state
+                if (!snapshot.settings.enabled) {
+                    persistWhatsAppPending(emptyList())
+                    whatsAppMessage = "WhatsApp hatırlatmaları kapatıldı ve bekleyen gönderimler iptal edildi."
+                } else {
+                    whatsAppMessage = if (snapshot.state == WhatsAppConnectionState.CONNECTED) {
+                        "WhatsApp ayarları kaydedildi."
+                    } else {
+                        "Ayarlar kaydedildi; Meta WhatsApp bağlantısı henüz hazır değil."
+                    }
+                    if (snapshot.state == WhatsAppConnectionState.CONNECTED) flushWhatsAppPending()
+                }
+            } else {
+                whatsAppConnectionState = if (save.httpCode == 401) WhatsAppConnectionState.INCOMPLETE else WhatsAppConnectionState.UNREACHABLE
+                whatsAppMessage = "WhatsApp ayarları sunucuya aktarılamadı."
+            }
+            whatsAppBusy = false
+        }
     }
 
     fun dispatch(action: AppointmentAction) {
-        val next = AppointmentEngine.reduce(appointments.toList(), action)
+        val before = appointments.toList()
+        val whatsAppMutation = WhatsAppMutationPolicy.fromAction(action, before)
+        val next = AppointmentEngine.reduce(before, action)
         persistAppointments(next)
+
         when (action) {
             is AppointmentAction.Add -> if (reminderEnabled) AppointmentReminderScheduler.schedule(context, action.appointment)
             is AppointmentAction.Update -> if (reminderEnabled) AppointmentReminderScheduler.schedule(context, action.appointment)
@@ -98,12 +369,15 @@ fun RandevuV13App() {
                 } else AppointmentReminderScheduler.schedule(context, changed)
             }
         }
+
+        whatsAppMutation?.let(::handleWhatsAppMutation)
     }
 
     LaunchedEffect(Unit) {
         AppointmentNotifier.ensureChannel(context)
         notificationPermission = v13HasNotificationPermission(context)
         if (reminderEnabled) AppointmentReminderScheduler.rescheduleAll(context, appointments.toList())
+        refreshWhatsAppStatus()
     }
 
     ReferenceRandevuTheme {
@@ -134,6 +408,12 @@ fun RandevuV13App() {
                 leaves = leaves,
                 reminderEnabled = reminderEnabled,
                 notificationPermission = notificationPermission,
+                whatsAppSettings = whatsAppSettings,
+                whatsAppServerConfig = whatsAppServerConfig,
+                whatsAppConnectionState = whatsAppConnectionState,
+                whatsAppPendingCount = whatsAppPending.size,
+                whatsAppBusy = whatsAppBusy,
+                whatsAppMessage = whatsAppMessage,
                 onToggleReminders = ::setReminders,
                 onRequestPermission = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -141,15 +421,31 @@ fun RandevuV13App() {
                 onAppointmentAction = ::dispatch,
                 onStaffChanged = { next -> staff.clear(); staff.addAll(next); store.saveStaff(next) },
                 onLeavesChanged = { next -> leaves.clear(); leaves.addAll(next); store.saveStaffLeaves(next) },
-                onProfileChanged = { profile = it; store.saveBusinessProfile(it) },
+                onProfileChanged = { updated ->
+                    profile = updated
+                    store.saveBusinessProfile(updated)
+                    if (whatsAppServerConfig.configured) {
+                        scope.launch { whatsAppApi.saveProfile(whatsAppServerConfig, updated) }
+                    }
+                },
                 onServicesChanged = { services = it; store.saveServices(it) },
+                onWhatsAppConnect = ::connectWhatsApp,
+                onWhatsAppSave = ::saveWhatsApp,
+                onWhatsAppTest = { refreshWhatsAppStatus(testConnection = true) },
                 onReset = { destructive ->
                     store.clearBusinessSetup(destructive)
                     profile = BusinessProfile.unconfigured()
                     services = emptyList()
                     setupStep = 0
+                    whatsAppSettings = WhatsAppSettings()
+                    whatsAppServerConfig = WhatsAppServerConfig()
+                    whatsAppConnectionState = WhatsAppConnectionState.DISABLED
+                    whatsAppPending.clear()
+                    whatsAppMessage = null
                     if (destructive) {
-                        appointments.clear(); staff.clear(); leaves.clear()
+                        appointments.clear()
+                        staff.clear()
+                        leaves.clear()
                         AppointmentReminderScheduler.cancelAll(context, emptyList())
                     }
                 }
@@ -157,7 +453,6 @@ fun RandevuV13App() {
         }
     }
 }
-
 @Composable
 private fun V13MainShell(
     profile: BusinessProfile,
@@ -167,6 +462,12 @@ private fun V13MainShell(
     leaves: List<StaffLeave>,
     reminderEnabled: Boolean,
     notificationPermission: Boolean,
+    whatsAppSettings: WhatsAppSettings,
+    whatsAppServerConfig: WhatsAppServerConfig,
+    whatsAppConnectionState: WhatsAppConnectionState,
+    whatsAppPendingCount: Int,
+    whatsAppBusy: Boolean,
+    whatsAppMessage: String?,
     onToggleReminders: (Boolean) -> Unit,
     onRequestPermission: () -> Unit,
     onAppointmentAction: (AppointmentAction) -> Unit,
@@ -174,6 +475,9 @@ private fun V13MainShell(
     onLeavesChanged: (List<StaffLeave>) -> Unit,
     onProfileChanged: (BusinessProfile) -> Unit,
     onServicesChanged: (List<ServiceRecord>) -> Unit,
+    onWhatsAppConnect: (String, String, WhatsAppSettings) -> Unit,
+    onWhatsAppSave: (String, WhatsAppSettings) -> Unit,
+    onWhatsAppTest: () -> Unit,
     onReset: (Boolean) -> Unit
 ) {
     var tabName by rememberSaveable { mutableStateOf(ReferenceTab.HOME.name) }
@@ -186,6 +490,7 @@ private fun V13MainShell(
     var staffDetailId by rememberSaveable { mutableStateOf<String?>(null) }
     var showBusiness by rememberSaveable { mutableStateOf(false) }
     var showServices by rememberSaveable { mutableStateOf(false) }
+    var showWhatsApp by rememberSaveable { mutableStateOf(false) }
     var showReset by rememberSaveable { mutableStateOf(false) }
     var infoTitle by rememberSaveable { mutableStateOf<String?>(null) }
     var infoBody by rememberSaveable { mutableStateOf("") }
@@ -212,18 +517,16 @@ private fun V13MainShell(
                 ReferenceTab.MORE -> V13More(
                     profile = profile,
                     reminderEnabled = reminderEnabled,
+                    whatsAppLabel = WhatsAppStatusProjection.label(whatsAppConnectionState, whatsAppPendingCount),
                     onToggleReminders = onToggleReminders,
                     onNotifications = { showNotifications = true },
                     onBusiness = { showBusiness = true },
                     onServices = { showServices = true },
-                    onWhatsApp = {
-                        infoTitle = "WhatsApp Hatırlatmaları"
-                        infoBody = "WhatsApp Business Cloud API bağlantısı sunucu üzerinden çalışır. Meta erişim anahtarı APK içinde tutulmaz."
-                    },
+                    onWhatsApp = { showWhatsApp = true },
                     onReset = { showReset = true },
                     onAbout = {
                         infoTitle = "Uygulama Hakkında"
-                        infoBody = "Randevu v1.3.0 • ELXVRO\nİşletme, randevu, personel, izin ve bildirim yönetimi."
+                        infoBody = "Randevu v1.3.1 • ELXVRO\nİşletme, randevu, personel, izin ve bildirim yönetimi."
                     }
                 )
             }
@@ -282,6 +585,18 @@ private fun V13MainShell(
 
     if (showBusiness) V13BusinessSettingsDialog(profile, { showBusiness = false }) { onProfileChanged(it); showBusiness = false }
     if (showServices) V13ServiceSettingsDialog(services, { showServices = false }) { onServicesChanged(it); showServices = false }
+    if (showWhatsApp) V13WhatsAppSettingsDialog(
+        settings = whatsAppSettings,
+        serverConfig = whatsAppServerConfig,
+        connectionState = whatsAppConnectionState,
+        pendingCount = whatsAppPendingCount,
+        busy = whatsAppBusy,
+        message = whatsAppMessage,
+        onDismiss = { showWhatsApp = false },
+        onConnect = onWhatsAppConnect,
+        onSave = onWhatsAppSave,
+        onTest = onWhatsAppTest
+    )
     if (showReset) V13ResetDialog({ showReset = false }) { destructive -> showReset = false; onReset(destructive) }
     infoTitle?.let { title -> V12InfoDialog(title, infoBody) { infoTitle = null; infoBody = "" } }
 }
@@ -485,6 +800,7 @@ private fun V13Staff(appointments: List<Appointment>, staff: List<StaffRecord>, 
 private fun V13More(
     profile: BusinessProfile,
     reminderEnabled: Boolean,
+    whatsAppLabel: String,
     onToggleReminders: (Boolean) -> Unit,
     onNotifications: () -> Unit,
     onBusiness: () -> Unit,
@@ -515,11 +831,11 @@ private fun V13More(
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.DesignServices, "Hizmetler", onClick = onServices)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Send, "WhatsApp Hatırlatmaları", "Kurulum", onClick = onWhatsApp)
+            V12SettingsRow(Icons.Rounded.Send, "WhatsApp Hatırlatmaları", whatsAppLabel, onClick = onWhatsApp)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.RestartAlt, "İşletme Kurulumunu Sıfırla", onClick = onReset)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v1.3.0", onClick = onAbout)
+            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v1.3.1", onClick = onAbout)
         }
     }
 }
