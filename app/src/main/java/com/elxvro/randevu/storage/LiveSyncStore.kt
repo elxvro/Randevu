@@ -11,6 +11,10 @@ import com.elxvro.randevu.core.ConnectionState
 import com.elxvro.randevu.core.LiveSyncState
 import com.elxvro.randevu.core.PendingSyncOperation
 import com.elxvro.randevu.core.SyncOperationType
+import com.elxvro.randevu.staff.StaffLeave
+import com.elxvro.randevu.staff.StaffLeaveEngine
+import com.elxvro.randevu.staff.StaffRecord
+import com.elxvro.randevu.staff.defaultStaffRecords
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -63,6 +67,48 @@ class LiveSyncStore(context: Context) {
         val array = JSONArray()
         appointments.forEach { array.put(encodeAppointment(it)) }
         prefs.edit().putString(KEY_APPOINTMENTS, array.toString()).apply()
+    }
+
+    fun loadStaff(): List<StaffRecord> {
+        val raw = prefs.getString(KEY_STAFF, null) ?: return defaultStaffRecords()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    array.optJSONObject(index)?.let(::decodeStaff)?.let(::add)
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveStaff(staff: List<StaffRecord>) {
+        val array = JSONArray()
+        staff.forEach { array.put(encodeStaff(it)) }
+        prefs.edit().putString(KEY_STAFF, array.toString()).apply()
+    }
+
+    fun loadStaffLeaves(): List<StaffLeave> {
+        val raw = prefs.getString(KEY_STAFF_LEAVES, null) ?: return emptyList()
+        return runCatching {
+            val array = JSONArray(raw)
+            buildList {
+                for (index in 0 until array.length()) {
+                    array.optJSONObject(index)?.let(::decodeStaffLeave)?.let(::add)
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
+
+    fun saveStaffLeaves(leaves: List<StaffLeave>) {
+        val array = JSONArray()
+        leaves.filter(StaffLeaveEngine::isValid).forEach { array.put(encodeStaffLeave(it)) }
+        prefs.edit().putString(KEY_STAFF_LEAVES, array.toString()).apply()
+    }
+
+    fun loadReminderEnabled(): Boolean = prefs.getBoolean(KEY_REMINDER_ENABLED, false)
+
+    fun saveReminderEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_REMINDER_ENABLED, enabled).apply()
     }
 
     fun loadBackendState(): BackendState {
@@ -153,11 +199,58 @@ class LiveSyncStore(context: Context) {
         )
     }.getOrNull()
 
+    private fun encodeStaff(staff: StaffRecord): JSONObject = JSONObject()
+        .put("id", staff.id)
+        .put("name", staff.name)
+        .put("title", staff.title)
+        .put("phone", staff.phone)
+        .put("active", staff.active)
+
+    private fun decodeStaff(json: JSONObject): StaffRecord? = runCatching {
+        val id = json.getString("id").trim()
+        val name = json.getString("name").trim()
+        if (id.isBlank() || name.isBlank()) return@runCatching null
+        StaffRecord(
+            id = id,
+            name = name,
+            title = json.optString("title", "Personel").ifBlank { "Personel" },
+            phone = json.optString("phone"),
+            active = json.optBoolean("active", true)
+        )
+    }.getOrNull()
+
+    private fun encodeStaffLeave(leave: StaffLeave): JSONObject = JSONObject()
+        .put("id", leave.id)
+        .put("staff_id", leave.staffId)
+        .put("start_date", leave.startDate)
+        .put("end_date", leave.endDate)
+        .put("start_time", leave.startTime)
+        .put("end_time", leave.endTime)
+        .put("reason", leave.reason)
+        .put("created_at", leave.createdAt)
+
+    private fun decodeStaffLeave(json: JSONObject): StaffLeave? = runCatching {
+        val leave = StaffLeave(
+            id = json.getString("id").trim(),
+            staffId = json.getString("staff_id").trim(),
+            startDate = json.getString("start_date").trim(),
+            endDate = json.getString("end_date").trim(),
+            startTime = json.optString("start_time").takeIf { it.isNotBlank() && it != "null" },
+            endTime = json.optString("end_time").takeIf { it.isNotBlank() && it != "null" },
+            reason = json.optString("reason"),
+            createdAt = json.optLong("created_at", System.currentTimeMillis())
+        )
+        if (leave.id.isBlank() || leave.staffId.isBlank() || !StaffLeaveEngine.isValid(leave)) null else leave
+    }.getOrNull()
+
     private companion object {
         const val KEY_PENDING = "pending"
         const val KEY_LAST_SYNC = "last_sync"
         const val KEY_SEQUENCE = "sequence"
         const val KEY_APPOINTMENTS = "appointments"
+        const val KEY_STAFF = "staff_v12"
+        const val KEY_STAFF_LEAVES = "staff_leaves_v12"
+        const val KEY_REMINDER_ENABLED = "reminder_enabled_v12"
         const val KEY_MODE = "mode"
         const val KEY_BASE_URL = "base_url"
         const val KEY_TOKEN = "token"

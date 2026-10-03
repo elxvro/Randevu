@@ -24,12 +24,14 @@ class ReferenceDesignContractTest {
     }
 
     @Test
-    fun `spacing and radii stay compact`() {
+    fun `spacing radii and system bar contracts stay compact`() {
         assertEquals(16, ReferenceDesignContract.pageInsetDp)
         assertEquals(12, ReferenceDesignContract.cardGapDp)
         assertEquals(18, ReferenceDesignContract.cardRadiusDp)
         assertEquals(14, ReferenceDesignContract.controlRadiusDp)
-        assertEquals(72, ReferenceDesignContract.bottomNavHeightDp)
+        assertEquals(56, ReferenceDesignContract.headerHeightDp)
+        assertEquals(64, ReferenceDesignContract.bottomNavContentHeightDp)
+        assertEquals(64, ReferenceDesignContract.bottomNavHeightDp)
         assertTrue(ReferenceDesignContract.cardRadiusDp < 24)
     }
 }

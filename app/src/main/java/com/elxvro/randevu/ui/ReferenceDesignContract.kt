@@ -30,8 +30,11 @@ object ReferenceDesignContract {
     const val cardRadiusDp: Int = 18
     const val controlRadiusDp: Int = 14
     const val sheetRadiusDp: Int = 24
-    const val headerHeightDp: Int = 64
-    const val bottomNavHeightDp: Int = 72
+    const val headerHeightDp: Int = 56
+    const val bottomNavContentHeightDp: Int = 64
+
+    // Kept for the legacy reference screen while v1.2.0 uses the explicit content-height token.
+    const val bottomNavHeightDp: Int = bottomNavContentHeightDp
 
     val bottomTabs: List<ReferenceTab> = ReferenceTab.entries
 }
