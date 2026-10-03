@@ -37,9 +37,9 @@ check($rows[0]['recipient_phone'] === '905551112233', 'phone normalization');
 
 $later = ReminderSchedule::build($appointment, $settings, new DateTimeImmutable('2026-10-04 08:00:00', new DateTimeZone('UTC')));
 check(count($later) === 1 && $later[0]['offset_minutes'] === 120, 'past 24h trigger skipped independently');
-check(ReminderSchedule::build($appointment + ['status' => 'cancelled'], $settings, new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'cancelled yields none');
-check(ReminderSchedule::build($appointment + ['status' => 'completed'], $settings, new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'completed yields none');
-check(ReminderSchedule::build($appointment + ['customer_phone' => 'bad'], $settings, new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'bad phone yields none');
-check(ReminderSchedule::build($appointment, $settings + ['timezone' => 'Bad/Zone'], new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'bad timezone yields none');
+check(ReminderSchedule::build(array_merge($appointment, ['status' => 'cancelled']), $settings, new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'cancelled yields none');
+check(ReminderSchedule::build(array_merge($appointment, ['status' => 'completed']), $settings, new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'completed yields none');
+check(ReminderSchedule::build(array_merge($appointment, ['customer_phone' => 'bad']), $settings, new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'bad phone yields none');
+check(ReminderSchedule::build($appointment, array_merge($settings, ['timezone' => 'Bad/Zone']), new DateTimeImmutable('2026-10-04 06:00:00', new DateTimeZone('UTC'))) === [], 'bad timezone yields none');
 
 echo "reminder_schedule_test: OK\n";
