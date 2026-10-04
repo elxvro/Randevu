@@ -29,22 +29,6 @@ interface V2StaffStore
     public function deleteLeave(int $businessId, string $externalId, int $expectedVersion): void;
 }
 
-final class V2VersionConflict extends RuntimeException
-{
-    public function __construct(public array $current)
-    {
-        parent::__construct(V2ApiError::VERSION_CONFLICT);
-    }
-}
-
-final class V2Version
-{
-    public static function guard(int $expected, int $current, array $record): void
-    {
-        if ($expected !== $current) throw new V2VersionConflict($record);
-    }
-}
-
 final class V2TenantService
 {
     public function __construct(

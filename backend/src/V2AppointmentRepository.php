@@ -237,7 +237,7 @@ final class V2AppointmentRepository implements V2AppointmentStore
         $sql.=' LIMIT 1 FOR UPDATE';
         $stmt=$this->pdo->prepare($sql);
         $stmt->execute($params);
-        if($stmt->fetchColumn()!==false) throw new RuntimeException(V2ApiError::SLOT_UNAVAILABLE);
+        if($stmt->fetchColumn()!==false) throw new RuntimeException('slot_unavailable');
     }
 
     private function project(array $row): array
