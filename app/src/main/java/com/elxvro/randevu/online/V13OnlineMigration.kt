@@ -72,13 +72,17 @@ object V13OnlineMigration {
                 .put("reason", item.reason))
         }
 
+        val serviceByName = services.associateBy { it.name.trim().lowercase() }
+        val staffByName = staff.associateBy { it.name.trim().lowercase() }
         appointments.forEach { item ->
+            val serviceId = serviceByName[item.service.trim().lowercase()]?.id.orEmpty()
+            val staffId = staffByName[item.staff.trim().lowercase()]?.id.orEmpty()
             add(OnlineEntityType.APPOINTMENT, item.id, JSONObject()
                 .put("external_id", item.id)
                 .put("customer_name", item.customer)
                 .put("customer_phone", item.phone)
-                .put("service_name", item.service)
-                .put("staff_name", item.staff)
+                .put("service_external_id", serviceId)
+                .put("staff_external_id", staffId)
                 .put("date", item.date)
                 .put("time", item.time)
                 .put("status", item.status.name.lowercase())
