@@ -82,3 +82,8 @@ CREATE TABLE IF NOT EXISTS rate_limit_events (
     occurred_at DATETIME NOT NULL,
     KEY idx_rate_limit_lookup (action, key_hash, occurred_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+ALTER TABLE whatsapp_reminder_queue
+    DROP INDEX uq_whatsapp_reminder,
+    ADD UNIQUE KEY uq_whatsapp_reminder (business_id, appointment_external_id, offset_minutes);

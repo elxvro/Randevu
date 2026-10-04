@@ -160,7 +160,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_reminder_queue (
     parameters_json JSON NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uq_whatsapp_reminder (appointment_external_id, offset_minutes),
+    UNIQUE KEY uq_whatsapp_reminder (business_id, appointment_external_id, offset_minutes),
     KEY idx_whatsapp_due (status, next_attempt_at, scheduled_at_utc),
     KEY idx_whatsapp_business_appointment (business_id, appointment_external_id),
     CONSTRAINT fk_whatsapp_reminder_business FOREIGN KEY (business_id) REFERENCES businesses(id) ON DELETE CASCADE
