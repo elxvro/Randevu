@@ -49,8 +49,9 @@ final class Auth
 
         $pdo->beginTransaction();
         try {
-            $stmt = $pdo->prepare('INSERT INTO businesses(name,phone,address,timezone) VALUES(:name,:phone,:address,:timezone)');
-            $stmt->execute(['name'=>$businessName,'phone'=>$phone,'address'=>trim((string)($payload['address'] ?? '')),'timezone'=>$timezone]);
+            $slug = Slug::unique($pdo, $businessName);
+            $stmt = $pdo->prepare('INSERT INTO businesses(name,slug,phone,address,timezone) VALUES(:name,:slug,:phone,:address,:timezone)');
+            $stmt->execute(['name'=>$businessName,'slug'=>$slug,'phone'=>$phone,'address'=>trim((string)($payload['address'] ?? '')),'timezone'=>$timezone]);
             $businessId = (int) $pdo->lastInsertId();
             $stmt = $pdo->prepare("INSERT INTO users(business_id,role,name,phone) VALUES(:business,'business',:name,:phone)");
             $stmt->execute(['business'=>$businessId,'name'=>$ownerName,'phone'=>$phone]);
