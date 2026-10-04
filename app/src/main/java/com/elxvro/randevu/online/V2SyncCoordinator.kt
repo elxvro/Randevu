@@ -34,6 +34,7 @@ interface V2SyncPersistence {
     fun setVersion(entity: OnlineEntityType, id: String, version: Int)
     fun saveConflict(value: SyncConflict?)
     fun markBootstrap(serverTime: String)
+    fun markImported(entity: OnlineEntityType, id: String) {}
 }
 
 class V2SyncCoordinator(
@@ -72,9 +73,12 @@ class V2SyncCoordinator(
         for (mutation in queue.toList()) {
             when (val result = transport.apply(sessionToken, mutation)) {
                 is V2TransportResult.Success -> {
+                    persistence.setVersion(mutation.entityType, mutation.externalId, result.value.version)
+                    if (mutation.operationId.startsWith("import-")) {
+                        persistence.markImported(mutation.entityType, mutation.externalId)
+                    }
                     queue = OnlineSyncQueue.remove(queue, mutation.operationId)
                     persistence.savePending(queue)
-                    persistence.setVersion(mutation.entityType, mutation.externalId, result.value.version)
                     persistence.saveConflict(null)
                 }
                 is V2TransportResult.Offline ->
