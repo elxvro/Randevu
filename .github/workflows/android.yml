@@ -27,7 +27,11 @@ jobs:
       - name: Validate PHP backend
         run: |
           find backend -name '*.php' -print0 | xargs -0 -n1 php -l
-          for t in backend/tests/*_test.php backend/tests/schema_contract.php; do php "$t"; done
+          status=0
+          for t in backend/tests/*_test.php backend/tests/schema_contract.php; do
+            php "$t" || status=1
+          done
+          exit "$status"
 
       - name: Test and build debug APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
