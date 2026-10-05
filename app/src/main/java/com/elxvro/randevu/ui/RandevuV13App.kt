@@ -63,7 +63,16 @@ import java.time.LocalDateTime
 import kotlinx.coroutines.launch
 
 @Composable
-fun RandevuV13App() {
+fun RandevuV13App(
+    onlineStatusLabel: String? = null,
+    cloudOwnsWhatsApp: Boolean = false,
+    onCloudLogout: (() -> Unit)? = null,
+    onCloudBusinessChanged: ((BusinessProfile) -> Unit)? = null,
+    onCloudServicesChanged: ((List<ServiceRecord>, List<ServiceRecord>) -> Unit)? = null,
+    onCloudStaffChanged: ((List<StaffRecord>, List<StaffRecord>) -> Unit)? = null,
+    onCloudLeavesChanged: ((List<StaffLeave>, List<StaffLeave>) -> Unit)? = null,
+    onCloudAppointmentAction: ((AppointmentAction, List<Appointment>, List<ServiceRecord>, List<StaffRecord>) -> Unit)? = null
+) {
     val context = LocalContext.current
     val store = remember { LiveSyncStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
@@ -354,7 +363,7 @@ fun RandevuV13App() {
 
     fun dispatch(action: AppointmentAction) {
         val before = appointments.toList()
-        val whatsAppMutation = WhatsAppMutationPolicy.fromAction(action, before)
+        val whatsAppMutation = if (cloudOwnsWhatsApp) null else WhatsAppMutationPolicy.fromAction(action, before)
         val next = AppointmentEngine.reduce(before, action)
         persistAppointments(next)
 
@@ -371,13 +380,14 @@ fun RandevuV13App() {
         }
 
         whatsAppMutation?.let(::handleWhatsAppMutation)
+        onCloudAppointmentAction?.invoke(action, before, services, staff.toList())
     }
 
     LaunchedEffect(Unit) {
         AppointmentNotifier.ensureChannel(context)
         notificationPermission = v13HasNotificationPermission(context)
         if (reminderEnabled) AppointmentReminderScheduler.rescheduleAll(context, appointments.toList())
-        refreshWhatsAppStatus()
+        if (!cloudOwnsWhatsApp) refreshWhatsAppStatus()
     }
 
     ReferenceRandevuTheme {
@@ -388,14 +398,29 @@ fun RandevuV13App() {
                 staff = staff,
                 initialStep = setupStep,
                 reminderEnabled = reminderEnabled,
-                onProfileChanged = { profile = it; store.saveBusinessProfile(it) },
-                onServicesChanged = { services = it; store.saveServices(it) },
-                onStaffChanged = { next -> staff.clear(); staff.addAll(next); store.saveStaff(next) },
+                onProfileChanged = {
+                    profile = it
+                    store.saveBusinessProfile(it)
+                },
+                onServicesChanged = { next ->
+                    val before = services
+                    services = next
+                    store.saveServices(next)
+                    onCloudServicesChanged?.invoke(before, next)
+                },
+                onStaffChanged = { next ->
+                    val before = staff.toList()
+                    staff.clear()
+                    staff.addAll(next)
+                    store.saveStaff(next)
+                    onCloudStaffChanged?.invoke(before, next)
+                },
                 onReminderChanged = ::setReminders,
                 onStepChanged = { setupStep = it; store.saveSetupStep(it) },
                 onComplete = { completed ->
                     profile = completed
                     store.saveBusinessProfile(completed)
+                    onCloudBusinessChanged?.invoke(completed)
                     setupStep = 4
                     store.saveSetupStep(4)
                 }
@@ -414,21 +439,41 @@ fun RandevuV13App() {
                 whatsAppPendingCount = whatsAppPending.size,
                 whatsAppBusy = whatsAppBusy,
                 whatsAppMessage = whatsAppMessage,
+                onlineStatusLabel = onlineStatusLabel,
+                onCloudLogout = onCloudLogout,
                 onToggleReminders = ::setReminders,
                 onRequestPermission = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                 },
                 onAppointmentAction = ::dispatch,
-                onStaffChanged = { next -> staff.clear(); staff.addAll(next); store.saveStaff(next) },
-                onLeavesChanged = { next -> leaves.clear(); leaves.addAll(next); store.saveStaffLeaves(next) },
+                onStaffChanged = { next ->
+                    val before = staff.toList()
+                    staff.clear()
+                    staff.addAll(next)
+                    store.saveStaff(next)
+                    onCloudStaffChanged?.invoke(before, next)
+                },
+                onLeavesChanged = { next ->
+                    val before = leaves.toList()
+                    leaves.clear()
+                    leaves.addAll(next)
+                    store.saveStaffLeaves(next)
+                    onCloudLeavesChanged?.invoke(before, next)
+                },
                 onProfileChanged = { updated ->
                     profile = updated
                     store.saveBusinessProfile(updated)
-                    if (whatsAppServerConfig.configured) {
+                    onCloudBusinessChanged?.invoke(updated)
+                    if (!cloudOwnsWhatsApp && whatsAppServerConfig.configured) {
                         scope.launch { whatsAppApi.saveProfile(whatsAppServerConfig, updated) }
                     }
                 },
-                onServicesChanged = { services = it; store.saveServices(it) },
+                onServicesChanged = { next ->
+                    val before = services
+                    services = next
+                    store.saveServices(next)
+                    onCloudServicesChanged?.invoke(before, next)
+                },
                 onWhatsAppConnect = ::connectWhatsApp,
                 onWhatsAppSave = ::saveWhatsApp,
                 onWhatsAppTest = { refreshWhatsAppStatus(testConnection = true) },
@@ -468,6 +513,8 @@ private fun V13MainShell(
     whatsAppPendingCount: Int,
     whatsAppBusy: Boolean,
     whatsAppMessage: String?,
+    onlineStatusLabel: String?,
+    onCloudLogout: (() -> Unit)?,
     onToggleReminders: (Boolean) -> Unit,
     onRequestPermission: () -> Unit,
     onAppointmentAction: (AppointmentAction) -> Unit,
@@ -517,16 +564,18 @@ private fun V13MainShell(
                 ReferenceTab.MORE -> V13More(
                     profile = profile,
                     reminderEnabled = reminderEnabled,
+                    onlineStatusLabel = onlineStatusLabel,
                     whatsAppLabel = WhatsAppStatusProjection.label(whatsAppConnectionState, whatsAppPendingCount),
                     onToggleReminders = onToggleReminders,
                     onNotifications = { showNotifications = true },
                     onBusiness = { showBusiness = true },
                     onServices = { showServices = true },
                     onWhatsApp = { showWhatsApp = true },
+                    onCloudLogout = onCloudLogout,
                     onReset = { showReset = true },
                     onAbout = {
                         infoTitle = "Uygulama Hakkında"
-                        infoBody = "Randevu v1.3.1 • ELXVRO\nİşletme, randevu, personel, izin ve bildirim yönetimi."
+                        infoBody = "Randevu v2.0.0 • ELXVRO\nİşletme, randevu, personel, izin ve bildirim yönetimi."
                     }
                 )
             }
@@ -800,12 +849,14 @@ private fun V13Staff(appointments: List<Appointment>, staff: List<StaffRecord>, 
 private fun V13More(
     profile: BusinessProfile,
     reminderEnabled: Boolean,
+    onlineStatusLabel: String?,
     whatsAppLabel: String,
     onToggleReminders: (Boolean) -> Unit,
     onNotifications: () -> Unit,
     onBusiness: () -> Unit,
     onServices: () -> Unit,
     onWhatsApp: () -> Unit,
+    onCloudLogout: (() -> Unit)?,
     onReset: () -> Unit,
     onAbout: () -> Unit
 ) {
@@ -818,7 +869,7 @@ private fun V13More(
                     Text(profile.businessName, color = RefText, fontWeight = FontWeight.Bold, fontSize = 14.sp)
                     Text(profile.ownerName.ifBlank { "İşletme sahibi" }, color = RefTextMuted, fontSize = 10.sp)
                 }
-                V12MiniPill("Kurulu", RefSuccess)
+                V12MiniPill(onlineStatusLabel ?: "Kurulu", if (onlineStatusLabel == "Online") RefSuccess else RefWarning)
             }
         }
         Spacer(Modifier.height(10.dp))
@@ -832,10 +883,16 @@ private fun V13More(
             V12SettingsRow(Icons.Rounded.DesignServices, "Hizmetler", onClick = onServices)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.Send, "WhatsApp Hatırlatmaları", whatsAppLabel, onClick = onWhatsApp)
+            if (onCloudLogout != null) {
+                HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
+                V12SettingsRow(Icons.Rounded.CloudQueue, "Online Durum", onlineStatusLabel ?: "Bağlantı yok", onClick = {})
+                HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
+                V12SettingsRow(Icons.Rounded.Logout, "Oturumu Kapat", onClick = onCloudLogout)
+            }
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.RestartAlt, "İşletme Kurulumunu Sıfırla", onClick = onReset)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v1.3.1", onClick = onAbout)
+            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v2.0.0", onClick = onAbout)
         }
     }
 }

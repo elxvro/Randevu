@@ -32,10 +32,10 @@ function v2_body_without_version(array $payload): array {
 
 try {
     if ($method === 'GET' && route_ends_with($path, '/health')) {
-        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'1.3.1','php'=>PHP_VERSION,'time'=>gmdate('c')]);
+        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'2.0.0','php'=>PHP_VERSION,'time'=>gmdate('c')]);
     }
     if ($method === 'GET' && route_ends_with($path, '/version')) {
-        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'1.3.1']);
+        Http::respond(['ok'=>true,'service'=>'Randevu API','version'=>'2.0.0']);
     }
 
     $config = Config::load();

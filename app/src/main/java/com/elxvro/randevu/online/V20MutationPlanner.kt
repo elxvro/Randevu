@@ -5,6 +5,7 @@ import com.elxvro.randevu.business.ServiceRecord
 import com.elxvro.randevu.core.Appointment
 import com.elxvro.randevu.core.AppointmentAction
 import com.elxvro.randevu.core.AppointmentStatus
+import com.elxvro.randevu.staff.StaffLeave
 import com.elxvro.randevu.staff.StaffRecord
 import org.json.JSONObject
 
@@ -74,6 +75,97 @@ object V20MutationPlanner {
             )
         }
 
+        return operations
+    }
+
+    fun staffChanges(
+        before: List<StaffRecord>,
+        after: List<StaffRecord>,
+        versions: Map<String, Int>,
+        now: Long = System.currentTimeMillis()
+    ): List<OnlineMutation> {
+        val old = before.associateBy { it.id }
+        val next = after.associateBy { it.id }
+        val operations = mutableListOf<OnlineMutation>()
+        var tick = 0L
+
+        after.forEach { item ->
+            if (old[item.id] != item) {
+                operations += OnlineMutation(
+                    operationId = operationId(OnlineEntityType.STAFF, item.id, now + tick++),
+                    entityType = OnlineEntityType.STAFF,
+                    externalId = item.id,
+                    mutationType = OnlineMutationType.UPSERT,
+                    expectedVersion = versions[versionKey(OnlineEntityType.STAFF, item.id)],
+                    payloadJson = JSONObject()
+                        .put("external_id", item.id)
+                        .put("name", item.name)
+                        .put("title", item.title)
+                        .put("phone", item.phone)
+                        .put("active", item.active)
+                        .put("public_booking", true)
+                        .toString(),
+                    createdAtEpochMs = now + tick
+                )
+            }
+        }
+        before.filter { it.id !in next }.forEach { item ->
+            operations += OnlineMutation(
+                operationId = operationId(OnlineEntityType.STAFF, item.id, now + tick++),
+                entityType = OnlineEntityType.STAFF,
+                externalId = item.id,
+                mutationType = OnlineMutationType.DELETE,
+                expectedVersion = versions[versionKey(OnlineEntityType.STAFF, item.id)],
+                payloadJson = "{}",
+                createdAtEpochMs = now + tick
+            )
+        }
+        return operations
+    }
+
+    fun leaveChanges(
+        before: List<StaffLeave>,
+        after: List<StaffLeave>,
+        versions: Map<String, Int>,
+        now: Long = System.currentTimeMillis()
+    ): List<OnlineMutation> {
+        val old = before.associateBy { it.id }
+        val next = after.associateBy { it.id }
+        val operations = mutableListOf<OnlineMutation>()
+        var tick = 0L
+
+        after.forEach { item ->
+            if (old[item.id] != item) {
+                operations += OnlineMutation(
+                    operationId = operationId(OnlineEntityType.STAFF_LEAVE, item.id, now + tick++),
+                    entityType = OnlineEntityType.STAFF_LEAVE,
+                    externalId = item.id,
+                    mutationType = OnlineMutationType.UPSERT,
+                    expectedVersion = versions[versionKey(OnlineEntityType.STAFF_LEAVE, item.id)],
+                    payloadJson = JSONObject()
+                        .put("external_id", item.id)
+                        .put("staff_external_id", item.staffId)
+                        .put("start_date", item.startDate)
+                        .put("end_date", item.endDate)
+                        .put("start_time", item.startTime)
+                        .put("end_time", item.endTime)
+                        .put("reason", item.reason)
+                        .toString(),
+                    createdAtEpochMs = now + tick
+                )
+            }
+        }
+        before.filter { it.id !in next }.forEach { item ->
+            operations += OnlineMutation(
+                operationId = operationId(OnlineEntityType.STAFF_LEAVE, item.id, now + tick++),
+                entityType = OnlineEntityType.STAFF_LEAVE,
+                externalId = item.id,
+                mutationType = OnlineMutationType.DELETE,
+                expectedVersion = versions[versionKey(OnlineEntityType.STAFF_LEAVE, item.id)],
+                payloadJson = "{}",
+                createdAtEpochMs = now + tick
+            )
+        }
         return operations
     }
 
