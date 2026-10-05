@@ -14,6 +14,7 @@ return [
     'token_ttl_hours' => (int) (getenv('RANDEVU_TOKEN_TTL_HOURS') ?: 720),
     'app_setup_key' => getenv('RANDEVU_APP_SETUP_KEY') ?: '',
     'cron_key' => getenv('RANDEVU_CRON_KEY') ?: '',
+    'public_base_url' => getenv('RANDEVU_PUBLIC_BASE_URL') ?: '',
     'meta_access_token' => getenv('META_ACCESS_TOKEN') ?: '',
     'meta_phone_number_id' => getenv('META_PHONE_NUMBER_ID') ?: '',
     'meta_graph_version' => getenv('META_GRAPH_VERSION') ?: 'v23.0',

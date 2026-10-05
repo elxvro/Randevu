@@ -42,3 +42,13 @@ jobs:
           name: randevu-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+
+      - name: Upload backend package
+        uses: actions/upload-artifact@v4
+        with:
+          name: randevu-v2-backend
+          path: |
+            backend/**
+            README.md
+          if-no-files-found: error

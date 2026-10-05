@@ -15,3 +15,11 @@ Task 1: RED workflow 37230250214 failed on `v2 migration file missing` before pr
 Task 1: complete (commits d71666c..d383ba4, workflow 37230385897: PHP validation success; Android unit tests/build success; artifact upload success).
 
 Ruling: Tasks 2–6 backend RED tests are committed together and CI is changed to execute every PHP test even after individual failures. This preserves test-first RED evidence for every backend contract while reducing GitHub runner usage. Cost if wrong: commit history is less granular than the written plan, but production code still follows only after all tests have demonstrably failed.
+
+
+Task 2–6: backend contracts implemented and full PHP gate is green on subsequent builds.
+Task 7–9: Android account/session, encrypted bearer-token store, durable multi-entity queue, bootstrap projector, conflict handling and cloud mutation planner are implemented. RED workflow 37243985671 defined cloud mutation planning; GREEN workflow 37276307568 passed PHP validation, Android unit tests, APK assembly and artifact upload.
+Task 10: v2 Android shell implemented in commit 8847bdf806feba5769bb3c8b420cfe998cc10253. MainActivity launches RandevuV20App; login/register, bootstrap, v1.3 import, cloud mutation replay and online status are wired. v2 path suppresses the old Android-owned WhatsApp appointment mutation so the backend appointment response/queue is authoritative.
+Task 10 verification: workflow 37285338231 passed PHP validation, Android unit tests, APK assembly and artifact upload.
+Task 11 release target: Android 2.0.0/versionCode 20 and backend health/version 2.0.0.
+Release deployment constraint: code/package is production-oriented but live deployment still requires the hosting DB/config/HTTPS/cron values described in backend/INSTALL.md. No production secret is committed.
