@@ -29,6 +29,15 @@ jobs:
           find backend -name '*.php' -print0 | xargs -0 -n1 php -l
           for t in backend/tests/*_test.php backend/tests/schema_contract.php; do php "$t"; done
 
+      - name: Verify offline-only Android contract
+        run: |
+          if grep -R "android.permission.INTERNET" app/src/main/AndroidManifest.xml; then
+            echo "INTERNET permission must not exist in offline build"
+            exit 1
+          fi
+          grep -q 'versionName = "2.0.0"' app/build.gradle.kts
+          grep -q 'Çevrimdışı Mod' app/src/main/java/com/elxvro/randevu/ui/RandevuV13App.kt
+
       - name: Test and build debug APK
         run: gradle --no-daemon testDebugUnitTest assembleDebug
 

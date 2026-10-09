@@ -68,7 +68,7 @@ fun RandevuV13App() {
     val store = remember { LiveSyncStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
     val whatsAppApi = remember { WhatsAppApiClient() }
-    remember { store.migrateV13IfNeeded(); true }
+    remember { store.migrateV13IfNeeded(); store.enforceOfflineMode(); true }
 
     var profile by remember { mutableStateOf(store.loadBusinessProfile()) }
     var services by remember { mutableStateOf(store.loadServices()) }
@@ -522,11 +522,14 @@ private fun V13MainShell(
                     onNotifications = { showNotifications = true },
                     onBusiness = { showBusiness = true },
                     onServices = { showServices = true },
-                    onWhatsApp = { showWhatsApp = true },
+                    onWhatsApp = {
+                        infoTitle = "Çevrimdışı Mod"
+                        infoBody = "Bu sürüm tamamen internetsiz çalışır. Online hesap, sunucu senkronizasyonu ve otomatik WhatsApp gönderimi kapalıdır. Randevular, personel, hizmetler ve yerel bildirimler yalnızca cihazda tutulur."
+                    },
                     onReset = { showReset = true },
                     onAbout = {
                         infoTitle = "Uygulama Hakkında"
-                        infoBody = "Randevu v1.3.1 • ELXVRO\nİşletme, randevu, personel, izin ve bildirim yönetimi."
+                        infoBody = "Randevu v2.0.0 Offline • ELXVRO\nİnternet gerektirmeyen işletme, randevu, personel, izin ve yerel bildirim yönetimi."
                     }
                 )
             }
@@ -831,11 +834,11 @@ private fun V13More(
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.DesignServices, "Hizmetler", onClick = onServices)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Send, "WhatsApp Hatırlatmaları", whatsAppLabel, onClick = onWhatsApp)
+            V12SettingsRow(Icons.Rounded.Info, "Çevrimdışı Mod", "İnternet erişimi yok", onClick = onWhatsApp)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.RestartAlt, "İşletme Kurulumunu Sıfırla", onClick = onReset)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v1.3.1", onClick = onAbout)
+            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v2.0.0 Offline", onClick = onAbout)
         }
     }
 }

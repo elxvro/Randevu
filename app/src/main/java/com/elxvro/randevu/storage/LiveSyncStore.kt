@@ -36,6 +36,22 @@ class LiveSyncStore(context: Context) {
         prefs.edit().putBoolean(KEY_MIGRATION_V13, true).apply()
     }
 
+    fun enforceOfflineMode() {
+        prefs.edit()
+            .remove(KEY_WHATSAPP_SETTINGS)
+            .remove(KEY_WHATSAPP_SERVER)
+            .remove(KEY_WHATSAPP_PENDING)
+            .remove(KEY_PENDING)
+            .remove(KEY_LAST_SYNC)
+            .remove(KEY_BASE_URL)
+            .remove(KEY_TOKEN)
+            .remove(KEY_USER_ID)
+            .remove(KEY_DISPLAY_NAME)
+            .remove(KEY_PHONE)
+            .putString(KEY_MODE, ApiMode.DEMO.name)
+            .apply()
+    }
+
     fun loadBusinessProfile(): BusinessProfile = BusinessStorageCodec.decodeProfile(
         prefs.getString(KEY_BUSINESS_PROFILE, null),
         ZoneId.systemDefault().id
