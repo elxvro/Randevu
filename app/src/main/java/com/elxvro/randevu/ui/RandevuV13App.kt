@@ -68,7 +68,13 @@ fun RandevuV13App() {
     val store = remember { LiveSyncStore(context.applicationContext) }
     val scope = rememberCoroutineScope()
     val whatsAppApi = remember { WhatsAppApiClient() }
-    remember { store.migrateV13IfNeeded(); true }
+    remember {
+        store.migrateV13IfNeeded()
+        store.saveWhatsAppSettings(WhatsAppSettings(enabled = false))
+        store.saveWhatsAppServerConfig(WhatsAppServerConfig())
+        store.saveWhatsAppPending(emptyList())
+        true
+    }
 
     var profile by remember { mutableStateOf(store.loadBusinessProfile()) }
     var services by remember { mutableStateOf(store.loadServices()) }
@@ -79,11 +85,9 @@ fun RandevuV13App() {
     var reminderEnabled by rememberSaveable { mutableStateOf(store.loadReminderEnabled()) }
     var notificationPermission by remember { mutableStateOf(v13HasNotificationPermission(context)) }
 
-    var whatsAppSettings by remember { mutableStateOf(store.loadWhatsAppSettings()) }
-    var whatsAppServerConfig by remember { mutableStateOf(store.loadWhatsAppServerConfig()) }
-    val whatsAppPending = remember {
-        mutableStateListOf<WhatsAppPendingSync>().apply { addAll(store.loadWhatsAppPending()) }
-    }
+    var whatsAppSettings by remember { mutableStateOf(WhatsAppSettings(enabled = false)) }
+    var whatsAppServerConfig by remember { mutableStateOf(WhatsAppServerConfig()) }
+    val whatsAppPending = remember { mutableStateListOf<WhatsAppPendingSync>() }
     var whatsAppConnectionState by remember {
         mutableStateOf(
             when {
@@ -377,7 +381,6 @@ fun RandevuV13App() {
         AppointmentNotifier.ensureChannel(context)
         notificationPermission = v13HasNotificationPermission(context)
         if (reminderEnabled) AppointmentReminderScheduler.rescheduleAll(context, appointments.toList())
-        refreshWhatsAppStatus()
     }
 
     ReferenceRandevuTheme {
@@ -526,7 +529,7 @@ private fun V13MainShell(
                     onReset = { showReset = true },
                     onAbout = {
                         infoTitle = "Uygulama Hakkında"
-                        infoBody = "Randevu v1.3.1 • ELXVRO\nİşletme, randevu, personel, izin ve bildirim yönetimi."
+                        infoBody = "Randevu v1.4.0 • ELXVRO\nTamamen cihazda çalışan işletme, randevu, personel, izin ve bildirim yönetimi. Hesap ve internet gerekmez."
                     }
                 )
             }
@@ -831,11 +834,9 @@ private fun V13More(
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.DesignServices, "Hizmetler", onClick = onServices)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Send, "WhatsApp Hatırlatmaları", whatsAppLabel, onClick = onWhatsApp)
-            HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
             V12SettingsRow(Icons.Rounded.RestartAlt, "İşletme Kurulumunu Sıfırla", onClick = onReset)
             HorizontalDivider(color = RefBorder.copy(alpha = 0.45f))
-            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v1.3.1", onClick = onAbout)
+            V12SettingsRow(Icons.Rounded.Info, "Uygulama Hakkında", "v1.4.0", onClick = onAbout)
         }
     }
 }
